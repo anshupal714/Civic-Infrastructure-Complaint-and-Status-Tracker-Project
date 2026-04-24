@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Civic Infrastructure Tracker</title>
+  <meta name="description" content="Lodge and track civic infrastructure complaints — roads, water, electricity, sanitation and more." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     AUTH SCREEN  (shown when not logged in)
+════════════════════════════════════════════════ -->
+<div id="authScreen" class="auth-wrapper">
+  <div class="card auth-card">
+    <div class="auth-header">
+      <div class="auth-logo">🏛️</div>
+      <h2>Civic Infrastructure Tracker</h2>
+      <p style="margin-top:0.4rem;font-size:0.9rem;">Lodge and track complaints about civic issues in your area.</p>
+    </div>
+
+    <!-- Tab switcher -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin"    onclick="switchAuthTab('login')">Login</button>
+      <button class="auth-tab"        id="tabRegister" onclick="switchAuthTab('register')">Register</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <form class="auth-form" id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label" for="loginEmail">Email Address</label>
+        <input class="form-control" id="loginEmail" type="email" placeholder="you@example.com" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="loginPassword">Password</label>
+        <input class="form-control" id="loginPassword" type="password" placeholder="Enter your password" required />
+      </div>
+      <button class="btn btn-primary btn-full btn-lg" type="submit" id="loginBtn">
+        <span id="loginBtnText">Login</span>
+      </button>
+      <p class="text-center" style="font-size:0.85rem;">
+        Don't have an account?
+        <a href="#" style="color:var(--primary-light);" onclick="switchAuthTab('register')">Register here</a>
+      </p>
+    </form>
+
+    <!-- REGISTER FORM -->
+    <form class="auth-form hidden" id="registerForm" onsubmit="handleRegister(event)">
+      <div class="grid-2" style="gap:1rem;">
+        <div class="form-group">
+          <label class="form-label" for="regName">Full Name</label>
+          <input class="form-control" id="regName" type="text" placeholder="John Doe" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="regPhone">Phone (optional)</label>
+          <input class="form-control" id="regPhone" type="tel" placeholder="+91 98765 43210" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="regEmail">Email Address</label>
+        <input class="form-control" id="regEmail" type="email" placeholder="you@example.com" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="regPassword">Password <span style="color:var(--text-muted)">(min 6 chars)</span></label>
+        <input class="form-control" id="regPassword" type="password" placeholder="Create a strong password" required minlength="6" />
+      </div>
+      <button class="btn btn-primary btn-full btn-lg" type="submit" id="registerBtn">
+        <span id="registerBtnText">Create Account</span>
+      </button>
+      <p class="text-center" style="font-size:0.85rem;">
+        Already have an account?
+        <a href="#" style="color:var(--primary-light);" onclick="switchAuthTab('login')">Login here</a>
+      </p>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MAIN APP  (shown when logged in)
+════════════════════════════════════════════════ -->
+<div id="appScreen" class="hidden">
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="container navbar-inner">
+      <a class="navbar-brand" href="#">
+        <div class="navbar-logo">🏛️</div>
+        <span class="navbar-title">Civic <span>Tracker</span></span>
+      </a>
+      <div class="nav-links" id="navLinks">
+        <button class="nav-link active" onclick="navigate('dashboard')" id="nav-dashboard">Dashboard</button>
+        <button class="nav-link" onclick="navigate('complaints')" id="nav-complaints">My Complaints</button>
+        <button class="nav-link" onclick="navigate('submit')" id="nav-submit">+ Submit</button>
+        <button class="nav-link hidden" onclick="navigate('admin')" id="nav-admin">⚙ Admin</button>
+      </div>
+      <div class="nav-user">
+        <div class="nav-avatar" id="navAvatar">?</div>
+        <button class="btn btn-outline btn-sm" onclick="logout()">Logout</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- DASHBOARD PAGE -->
+  <section class="page active" id="page-dashboard">
+    <div class="container">
+      <div class="hero">
+        <div class="hero-badge">🏙️ Civic Infrastructure Platform</div>
+        <h1>Track & Resolve <span>Civic Issues</span></h1>
+        <p>Lodge complaints about roads, water supply, electricity, sanitation and more. Track resolution in real-time.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" onclick="navigate('submit')">+ Submit Complaint</button>
+          <button class="btn btn-outline btn-lg" onclick="navigate('complaints')">View My Complaints</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid-4 mb-3" id="statsGrid">
+        <div class="card stat-card"><div class="stat-icon">📋</div><div class="stat-number" id="statTotal">—</div><div class="stat-label">Total Complaints</div></div>
+        <div class="card stat-card"><div class="stat-icon">⏳</div><div class="stat-number" id="statPending">—</div><div class="stat-label">Pending</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔧</div><div class="stat-number" id="statProgress">—</div><div class="stat-label">In Progress</div></div>
+        <div class="card stat-card"><div class="stat-icon">✅</div><div class="stat-number" id="statResolved">—</div><div class="stat-label">Resolved</div></div>
+      </div>
+
+      <!-- Recent Complaints -->
+      <h2 class="mb-2">Recent Complaints</h2>
+      <div id="recentComplaints"></div>
+    </div>
+  </section>
+
+  <!-- COMPLAINTS LIST PAGE -->
+  <section class="page" id="page-complaints">
+    <div class="container">
+      <div class="flex mb-3" style="justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+        <h2>My Complaints</h2>
+        <button class="btn btn-primary" onclick="navigate('submit')">+ New Complaint</button>
+      </div>
+      <!-- Filters -->
+      <div class="filters-bar">
+        <select class="form-control" id="filterStatus" onchange="loadComplaints()">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="in_progress">In Progress</option>
+          <option value="resolved">Resolved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <select class="form-control" id="filterCategory" onchange="loadComplaints()">
+          <option value="">All Categories</option>
+          <option>Road</option><option>Water</option><option>Electricity</option>
+          <option>Sanitation</option><option>Street Light</option><option>Park</option>
+          <option>Drainage</option><option>Other</option>
+        </select>
+        <select class="form-control" id="filterPriority" onchange="loadComplaints()">
+          <option value="">All Priorities</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div id="complaintsList"></div>
+      <div class="flex mt-3" style="justify-content:center;gap:0.75rem;" id="paginationBar"></div>
+    </div>
+  </section>
+
+  <!-- SUBMIT COMPLAINT PAGE -->
+  <section class="page" id="page-submit">
+    <div class="container" style="max-width:720px;">
+      <h2 class="mb-3">Submit New Complaint</h2>
+      <div class="card">
+        <form id="complaintForm" onsubmit="handleComplaintSubmit(event)" class="flex-col gap-2">
+          <div class="form-group">
+            <label class="form-label" for="compTitle">Complaint Title *</label>
+            <input class="form-control" id="compTitle" type="text" placeholder="e.g. Large pothole on MG Road" required />
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label" for="compCategory">Category *</label>
+              <select class="form-control" id="compCategory" required>
+                <option value="">Select Category</option>
+                <option>Road</option><option>Water</option><option>Electricity</option>
+                <option>Sanitation</option><option>Street Light</option><option>Park</option>
+                <option>Drainage</option><option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="compPriority">Priority</label>
+              <select class="form-control" id="compPriority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label" for="compLocation">Location / Address *</label>
+              <input class="form-control" id="compLocation" type="text" placeholder="Street, Landmark, Area" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="compWard">Ward / Zone</label>
+              <input class="form-control" id="compWard" type="text" placeholder="e.g. Ward 12" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="compDescription">Description *</label>
+            <textarea class="form-control" id="compDescription" rows="4" placeholder="Describe the issue in detail..." required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="compImage">Attach Photo (optional, max 5MB)</label>
+            <input class="form-control" id="compImage" type="file" accept="image/*" style="padding:0.5rem;" />
+          </div>
+          <div class="flex gap-2 mt-1">
+            <button class="btn btn-primary btn-lg" type="submit" id="submitComplaintBtn">
+              <span id="submitComplaintText">Submit Complaint</span>
+            </button>
+            <button class="btn btn-outline" type="button" onclick="navigate('complaints')">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADMIN PAGE -->
+  <section class="page" id="page-admin">
+    <div class="container">
+      <h2 class="mb-1">Admin Dashboard</h2>
+      <p class="mb-3">Manage all citizen complaints and update resolution statuses.</p>
+
+      <!-- Admin Stats -->
+      <div class="grid-4 mb-3">
+        <div class="card stat-card"><div class="stat-icon">📋</div><div class="stat-number" id="aStatTotal">—</div><div class="stat-label">Total</div></div>
+        <div class="card stat-card"><div class="stat-icon">⏳</div><div class="stat-number" id="aStatPending">—</div><div class="stat-label">Pending</div></div>
+        <div class="card stat-card"><div class="stat-icon">🔧</div><div class="stat-number" id="aStatProgress">—</div><div class="stat-label">In Progress</div></div>
+        <div class="card stat-card"><div class="stat-icon">✅</div><div class="stat-number" id="aStatResolved">—</div><div class="stat-label">Resolved</div></div>
+      </div>
+
+      <!-- Admin Filters -->
+      <div class="filters-bar mb-2">
+        <select class="form-control" id="adminFilterStatus" onchange="loadAdminComplaints()">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="in_progress">In Progress</option>
+          <option value="resolved">Resolved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <select class="form-control" id="adminFilterCategory" onchange="loadAdminComplaints()">
+          <option value="">All Categories</option>
+          <option>Road</option><option>Water</option><option>Electricity</option>
+          <option>Sanitation</option><option>Street Light</option><option>Park</option>
+          <option>Drainage</option><option>Other</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table id="adminTable">
+            <thead>
+              <tr>
+                <th>#ID</th><th>Title</th><th>Citizen</th><th>Category</th>
+                <th>Priority</th><th>Status</th><th>Submitted</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="flex mt-3" style="justify-content:center;gap:0.75rem;" id="adminPaginationBar"></div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══ COMPLAINT DETAIL MODAL ═══ -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">Complaint Detail</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ═══ ADMIN STATUS UPDATE MODAL ═══ -->
+<div class="modal-overlay" id="statusModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <h3>Update Status</h3>
+      <button class="modal-close" onclick="closeStatusModal()">&times;</button>
+    </div>
+    <form onsubmit="handleStatusUpdate(event)" class="flex-col gap-2">
+      <input type="hidden" id="statusComplaintId" />
+      <div class="form-group">
+        <label class="form-label">New Status</label>
+        <select class="form-control" id="statusSelect">
+          <option value="pending">Pending</option>
+          <option value="in_progress">In Progress</option>
+          <option value="resolved">Resolved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Remark (optional)</label>
+        <textarea class="form-control" id="statusRemark" rows="3" placeholder="Add a note about this status change..."></textarea>
+      </div>
+      <button class="btn btn-primary" type="submit" id="statusUpdateBtn">Update Status</button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══ TOAST CONTAINER ═══ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
