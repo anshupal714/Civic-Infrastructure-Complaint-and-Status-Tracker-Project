@@ -52,14 +52,16 @@ if (!fs.existsSync(uploadsDir)) {
 // Allow the standalone frontend origin (Live Server, Vite, etc.)
 // In production replace FRONTEND_URL with your deployed domain.
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5500',
+  process.env.FRONTEND_URL,
+  process.env.RENDER_EXTERNAL_URL,
+  'http://localhost:5500',
   'http://127.0.0.1:5500',
-  'http://localhost:3000',  // keep for same-origin dev tools
-];
+  'http://localhost:3000',
+].filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (curl, Postman, mobile apps)
+    // Allow requests with no origin or allowed origins
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {

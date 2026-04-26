@@ -82,6 +82,47 @@ router.post('/', authenticate, upload.single('image'), async (req, res) => {
   }
 });
 
+// ─── GET /api/complaints/stats/summary ────────────────────────────────────────
+/**
+ * Get dashboard statistics (admin) or personal stats (citizen).
+ */
+router.get('/stats/summary', authenticate, async (req, res) => {
+  try {
+    let matchStage = {};
+
+    if (req.user.role !== 'admin') {
+      matchStage = { user_id: new mongoose.Types.ObjectId(req.user.id) };
+    }
+
+    const statsAgg = await Complaint.aggregate([
+      { $match: matchStage },
+      { $group: {
+          _id: null,
+          total: { $sum: 1 },
+          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          in_progress: { $sum: { $cond: [{ $eq: ['$status', 'in_progress'] }, 1, 0] } },
+          resolved: { $sum: { $cond: [{ $eq: ['$status', 'resolved'] }, 1, 0] } },
+          rejected: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } }
+      }}
+    ]);
+
+    const stats = statsAgg.length > 0 ? statsAgg[0] : { total: 0, pending: 0, in_progress: 0, resolved: 0, rejected: 0 };
+    delete stats._id;
+
+    const byCategoryAgg = await Complaint.aggregate([
+      { $match: matchStage },
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $project: { _id: 0, category: '$_id', count: 1 } }
+    ]);
+
+    return res.json({ success: true, stats, byCategory: byCategoryAgg });
+  } catch (err) {
+    console.error('[GET /complaints/stats/summary]', err);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+});
+
 // ─── GET /api/complaints ───────────────────────────────────────────────────────
 /**
  * Get complaints:
@@ -124,7 +165,7 @@ router.get('/', authenticate, async (req, res) => {
       if (c.user_id) {
         c.citizen_name = c.user_id.name;
         c.citizen_email = c.user_id.email;
-        c.user_id = c.user_id.id;
+        c.user_id = c.user_id._id || c.user_id.id;
       }
       return c;
     });
@@ -151,6 +192,10 @@ router.get('/', authenticate, async (req, res) => {
  */
 router.get('/:id', authenticate, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid complaint ID.' });
+    }
+
     let complaint = await Complaint.findById(req.params.id)
       .populate('user_id', 'name email')
       .lean({ virtuals: true });
@@ -160,7 +205,8 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 
     // Citizens can only access their own complaints
-    if (req.user.role !== 'admin' && complaint.user_id.id.toString() !== req.user.id) {
+    const complaintUserId = complaint.user_id ? (complaint.user_id._id || complaint.user_id.id || complaint.user_id).toString() : null;
+    if (req.user.role !== 'admin' && complaintUserId !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
 
@@ -168,7 +214,7 @@ router.get('/:id', authenticate, async (req, res) => {
     if (complaint.user_id) {
       complaint.citizen_name = complaint.user_id.name;
       complaint.citizen_email = complaint.user_id.email;
-      complaint.user_id = complaint.user_id.id;
+      complaint.user_id = complaint.user_id._id || complaint.user_id.id;
     }
 
     // Fetch status history
@@ -180,7 +226,7 @@ router.get('/:id', authenticate, async (req, res) => {
     history = history.map(h => {
       if (h.changed_by) {
         h.changed_by_name = h.changed_by.name;
-        h.changed_by = h.changed_by.id;
+        h.changed_by = h.changed_by._id || h.changed_by.id;
       }
       return h;
     });
@@ -195,7 +241,7 @@ router.get('/:id', authenticate, async (req, res) => {
       if (c.user_id) {
         c.author_name = c.user_id.name;
         c.author_role = c.user_id.role;
-        c.user_id = c.user_id.id;
+        c.user_id = c.user_id._id || c.user_id.id;
       }
       return c;
     });
@@ -214,6 +260,10 @@ router.get('/:id', authenticate, async (req, res) => {
  */
 router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid complaint ID.' });
+    }
+
     const { status, remark } = req.body;
 
     if (!status || !VALID_STATUSES.includes(status)) {
@@ -259,6 +309,10 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
  */
 router.post('/:id/comments', authenticate, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid complaint ID.' });
+    }
+
     const { message } = req.body;
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, message: 'Comment message is required.' });
@@ -288,7 +342,7 @@ router.post('/:id/comments', authenticate, async (req, res) => {
     if (newComment.user_id) {
       newComment.author_name = newComment.user_id.name;
       newComment.author_role = newComment.user_id.role;
-      newComment.user_id = newComment.user_id.id;
+      newComment.user_id = newComment.user_id._id || newComment.user_id.id;
     }
 
     return res.status(201).json({ success: true, comment: newComment });
@@ -298,45 +352,6 @@ router.post('/:id/comments', authenticate, async (req, res) => {
   }
 });
 
-// ─── GET /api/complaints/stats/summary ────────────────────────────────────────
-/**
- * Get dashboard statistics (admin) or personal stats (citizen).
- */
-router.get('/stats/summary', authenticate, async (req, res) => {
-  try {
-    let matchStage = {};
-
-    if (req.user.role !== 'admin') {
-      matchStage = { user_id: new mongoose.Types.ObjectId(req.user.id) };
-    }
-
-    const statsAgg = await Complaint.aggregate([
-      { $match: matchStage },
-      { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
-          in_progress: { $sum: { $cond: [{ $eq: ['$status', 'in_progress'] }, 1, 0] } },
-          resolved: { $sum: { $cond: [{ $eq: ['$status', 'resolved'] }, 1, 0] } },
-          rejected: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } }
-      }}
-    ]);
-
-    const stats = statsAgg.length > 0 ? statsAgg[0] : { total: 0, pending: 0, in_progress: 0, resolved: 0, rejected: 0 };
-    delete stats._id;
-
-    const byCategoryAgg = await Complaint.aggregate([
-      { $match: matchStage },
-      { $group: { _id: '$category', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $project: { _id: 0, category: '$_id', count: 1 } }
-    ]);
-
-    return res.json({ success: true, stats, byCategory: byCategoryAgg });
-  } catch (err) {
-    console.error('[GET /complaints/stats/summary]', err);
-    return res.status(500).json({ success: false, message: 'Internal server error.' });
-  }
-});
+// /stats/summary moved up to prevent route collision
 
 module.exports = router;
