@@ -96,6 +96,12 @@ app.use('/api', (req, res) => {
   res.status(404).json({ success: false, message: `Route ${req.method} ${req.path} not found.` });
 });
 
+// ─── Serve Frontend Static Files ──────────────────────
+app.use(express.static(path.join(__dirname, '../frontend')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
+});
+
 // ─── Global error handler ─────────────────────────────
 app.use((err, req, res, next) => {
   console.error('[Unhandled Error]', err.message);

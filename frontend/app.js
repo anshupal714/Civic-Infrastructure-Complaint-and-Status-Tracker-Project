@@ -14,7 +14,7 @@
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 // Point this to wherever the backend server is running.
-const API_BASE_URL = 'https://civic-infrastructure-complaint-and-8o38.onrender.com/api';
+const API_BASE_URL = '/api';
 
 // ─── App State ────────────────────────────────────────────────────────────────
 const STATE = {
