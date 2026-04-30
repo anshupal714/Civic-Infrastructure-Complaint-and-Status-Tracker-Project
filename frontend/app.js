@@ -14,7 +14,7 @@
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 // Point this to wherever the backend server is running.
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'http://localhost:3000/api';
 
 // ─── App State ────────────────────────────────────────────────────────────────
 const STATE = {
