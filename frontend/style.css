@@ -6,10 +6,10 @@
 
 /* ── CSS Variables ── */
 :root {
-  --primary:       #6366f1;
-  --primary-dark:  #4f46e5;
-  --primary-light: #818cf8;
-  --accent:        #22d3ee;
+  --primary:       #8b5cf6;
+  --primary-dark:  #7c3aed;
+  --primary-light: #a78bfa;
+  --accent:        #f43f5e;
   --success:       #10b981;
   --warning:       #f59e0b;
   --danger:        #ef4444;
@@ -42,14 +42,18 @@
 html { scroll-behavior: smooth; }
 body {
   font-family: 'Inter', sans-serif;
-  background: var(--bg-base);
+  background: linear-gradient(135deg, #0f1117, #1a1525, #170f1c, #0f1117);
+  background-size: 300% 300%;
+  animation: gradientBG 15s ease infinite;
   color: var(--text-primary);
   min-height: 100vh;
   line-height: 1.6;
-  background-image:
-    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(99,102,241,0.18) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(34,211,238,0.12) 0%, transparent 60%);
-  background-attachment: fixed;
+}
+
+@keyframes gradientBG {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* ── Typography ── */
