@@ -14,7 +14,8 @@
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 // Point this to wherever the backend server is running.
-const API_BASE_URL = 'http://localhost:3000/api';
+const isLocalDev = window.location.hostname === '127.0.0.1' || (window.location.hostname === 'localhost' && window.location.port !== '3000');
+const API_BASE_URL = isLocalDev ? 'http://localhost:3000/api' : '/api';
 
 // ─── App State ────────────────────────────────────────────────────────────────
 const STATE = {
