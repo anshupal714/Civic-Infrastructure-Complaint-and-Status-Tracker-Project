@@ -50,6 +50,7 @@
         Don't have an account?
         <a href="#" style="color:var(--primary-light);" onclick="switchAuthTab('register')">Register here</a>
       </p>
+
     </form>
 
     <!-- REGISTER FORM -->
@@ -231,47 +232,165 @@
   <!-- ADMIN PAGE -->
   <section class="page" id="page-admin">
     <div class="container">
-      <h2 class="mb-1">Admin Dashboard</h2>
-      <p class="mb-3">Manage all citizen complaints and update resolution statuses.</p>
-
-      <!-- Admin Stats -->
-      <div class="grid-4 mb-3">
-        <div class="card stat-card"><div class="stat-icon">📋</div><div class="stat-number" id="aStatTotal">—</div><div class="stat-label">Total</div></div>
-        <div class="card stat-card"><div class="stat-icon">⏳</div><div class="stat-number" id="aStatPending">—</div><div class="stat-label">Pending</div></div>
-        <div class="card stat-card"><div class="stat-icon">🔧</div><div class="stat-number" id="aStatProgress">—</div><div class="stat-label">In Progress</div></div>
-        <div class="card stat-card"><div class="stat-icon">✅</div><div class="stat-number" id="aStatResolved">—</div><div class="stat-label">Resolved</div></div>
-      </div>
-
-      <!-- Admin Filters -->
-      <div class="filters-bar mb-2">
-        <select class="form-control" id="adminFilterStatus" onchange="loadAdminComplaints()">
-          <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="in_progress">In Progress</option>
-          <option value="resolved">Resolved</option>
-          <option value="rejected">Rejected</option>
-        </select>
-        <select class="form-control" id="adminFilterCategory" onchange="loadAdminComplaints()">
-          <option value="">All Categories</option>
-          <option>Road</option><option>Water</option><option>Electricity</option>
-          <option>Sanitation</option><option>Street Light</option><option>Park</option>
-          <option>Drainage</option><option>Other</option>
-        </select>
-      </div>
-      <div class="card">
-        <div class="table-wrap">
-          <table id="adminTable">
-            <thead>
-              <tr>
-                <th>#ID</th><th>Title</th><th>Citizen</th><th>Category</th>
-                <th>Priority</th><th>Status</th><th>Submitted</th><th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="adminTableBody"></tbody>
-          </table>
+      <div class="admin-hero mb-3">
+        <div class="admin-hero-content">
+          <h2 class="mb-1">Admin Command Center</h2>
+          <p>Manage civic complaints, analyze data, and update resolution statuses in real-time.</p>
+        </div>
+        <div class="admin-hero-actions">
+          <button class="btn btn-outline btn-sm" onclick="loadAdminData()" id="adminRefreshBtn">
+            🔄 Refresh
+          </button>
         </div>
       </div>
-      <div class="flex mt-3" style="justify-content:center;gap:0.75rem;" id="adminPaginationBar"></div>
+
+      <!-- Admin Stats -->
+      <div class="admin-stats-grid mb-3">
+        <div class="card stat-card stat-card-total">
+          <div class="stat-icon-wrap">📋</div>
+          <div class="stat-number" id="aStatTotal">—</div>
+          <div class="stat-label">Total Complaints</div>
+          <div class="stat-bar"><div class="stat-bar-fill" id="aBarTotal" style="width:100%;background:var(--primary);"></div></div>
+        </div>
+        <div class="card stat-card stat-card-pending">
+          <div class="stat-icon-wrap">⏳</div>
+          <div class="stat-number" id="aStatPending">—</div>
+          <div class="stat-label">Pending Review</div>
+          <div class="stat-bar"><div class="stat-bar-fill" id="aBarPending" style="background:var(--warning);"></div></div>
+        </div>
+        <div class="card stat-card stat-card-progress">
+          <div class="stat-icon-wrap">🔧</div>
+          <div class="stat-number" id="aStatProgress">—</div>
+          <div class="stat-label">In Progress</div>
+          <div class="stat-bar"><div class="stat-bar-fill" id="aBarProgress" style="background:var(--info);"></div></div>
+        </div>
+        <div class="card stat-card stat-card-resolved">
+          <div class="stat-icon-wrap">✅</div>
+          <div class="stat-number" id="aStatResolved">—</div>
+          <div class="stat-label">Resolved</div>
+          <div class="stat-bar"><div class="stat-bar-fill" id="aBarResolved" style="background:var(--success);"></div></div>
+        </div>
+        <div class="card stat-card stat-card-rejected">
+          <div class="stat-icon-wrap">❌</div>
+          <div class="stat-number" id="aStatRejected">—</div>
+          <div class="stat-label">Rejected</div>
+          <div class="stat-bar"><div class="stat-bar-fill" id="aBarRejected" style="background:var(--danger);"></div></div>
+        </div>
+      </div>
+
+      <!-- View Mode Toggle + Filters -->
+      <div class="admin-toolbar mb-3">
+        <div class="view-toggle">
+          <button class="view-btn active" id="viewBtnKanban" onclick="switchAdminView('kanban')">
+            <span>⬛</span> Board
+          </button>
+          <button class="view-btn" id="viewBtnTable" onclick="switchAdminView('table')">
+            <span>☰</span> Table
+          </button>
+          <button class="view-btn" id="viewBtnUsers" onclick="switchAdminView('users')">
+            <span>👥</span> Users
+          </button>
+        </div>
+        <div class="admin-filters">
+          <select class="form-control" id="adminFilterCategory" onchange="loadAdminData()">
+            <option value="">All Categories</option>
+            <option>Road</option><option>Water</option><option>Electricity</option>
+            <option>Sanitation</option><option>Street Light</option><option>Park</option>
+            <option>Drainage</option><option>Other</option>
+          </select>
+          <select class="form-control" id="adminFilterPriority" onchange="loadAdminData()">
+            <option value="">All Priorities</option>
+            <option value="high">🔴 High</option>
+            <option value="medium">🟡 Medium</option>
+            <option value="low">🟢 Low</option>
+          </select>
+          <input class="form-control" id="adminSearchInput" type="text" placeholder="🔍 Search complaints…" oninput="debounceAdminSearch()" />
+        </div>
+      </div>
+
+      <!-- KANBAN VIEW -->
+      <div id="adminKanbanView">
+        <div class="kanban-board">
+          <!-- Pending Column -->
+          <div class="kanban-col">
+            <div class="kanban-col-header kanban-pending">
+              <span class="kanban-col-icon">⏳</span>
+              <span class="kanban-col-title">Pending</span>
+              <span class="kanban-col-count badge badge-pending" id="kanbanCountPending">0</span>
+            </div>
+            <div class="kanban-cards" id="kanbanPending"><div class="kanban-loading">Loading…</div></div>
+          </div>
+          <!-- In Progress Column -->
+          <div class="kanban-col">
+            <div class="kanban-col-header kanban-progress">
+              <span class="kanban-col-icon">🔧</span>
+              <span class="kanban-col-title">In Progress</span>
+              <span class="kanban-col-count badge badge-in_progress" id="kanbanCountProgress">0</span>
+            </div>
+            <div class="kanban-cards" id="kanbanInProgress"><div class="kanban-loading">Loading…</div></div>
+          </div>
+          <!-- Resolved Column -->
+          <div class="kanban-col">
+            <div class="kanban-col-header kanban-resolved">
+              <span class="kanban-col-icon">✅</span>
+              <span class="kanban-col-title">Resolved</span>
+              <span class="kanban-col-count badge badge-resolved" id="kanbanCountResolved">0</span>
+            </div>
+            <div class="kanban-cards" id="kanbanResolved"><div class="kanban-loading">Loading…</div></div>
+          </div>
+          <!-- Rejected Column -->
+          <div class="kanban-col">
+            <div class="kanban-col-header kanban-rejected">
+              <span class="kanban-col-icon">❌</span>
+              <span class="kanban-col-title">Rejected</span>
+              <span class="kanban-col-count badge badge-rejected" id="kanbanCountRejected">0</span>
+            </div>
+            <div class="kanban-cards" id="kanbanRejected"><div class="kanban-loading">Loading…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLE VIEW -->
+      <div id="adminTableView" class="hidden">
+        <div class="filters-bar mb-2">
+          <select class="form-control" id="adminFilterStatus" onchange="loadAdminTable()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="resolved">Resolved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table id="adminTable">
+              <thead>
+                <tr>
+                  <th>#ID</th><th>Title</th><th>Citizen</th><th>Category</th>
+                  <th>Priority</th><th>Status</th><th>Submitted</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="flex mt-3" style="justify-content:center;gap:0.75rem;" id="adminPaginationBar"></div>
+      </div>
+      <!-- USERS VIEW -->
+      <div id="adminUsersView" class="hidden">
+        <div class="card mb-3" style="padding:1rem;">
+          <div class="flex" style="gap:0.75rem;align-items:center;flex-wrap:wrap;">
+            <input class="form-control" id="usersSearchInput" type="text"
+              placeholder="🔍 Search by name or email…"
+              oninput="debounceUsersSearch()"
+              style="flex:1;min-width:200px;" />
+            <button class="btn btn-outline btn-sm" onclick="loadAdminUsers()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div id="usersGrid" class="users-grid"></div>
+        <div class="flex mt-3" style="justify-content:center;gap:0.75rem;" id="usersPaginationBar"></div>
+      </div>
+
     </div>
   </section>
 </div>
@@ -289,27 +408,57 @@
 
 <!-- ═══ ADMIN STATUS UPDATE MODAL ═══ -->
 <div class="modal-overlay" id="statusModal">
-  <div class="modal" style="max-width:440px;">
+  <div class="modal status-modal">
     <div class="modal-header">
-      <h3>Update Status</h3>
+      <div>
+        <h3 id="statusModalTitle">Update Status</h3>
+        <p id="statusModalSubtitle" style="font-size:0.82rem;color:var(--text-muted);margin-top:0.2rem;"></p>
+      </div>
       <button class="modal-close" onclick="closeStatusModal()">&times;</button>
     </div>
+
+    <!-- Complaint Quick Info -->
+    <div class="status-complaint-info" id="statusComplaintInfo"></div>
+
     <form onsubmit="handleStatusUpdate(event)" class="flex-col gap-2">
       <input type="hidden" id="statusComplaintId" />
+      <input type="hidden" id="statusSelect" />
+
+      <!-- Status Flow Buttons -->
       <div class="form-group">
-        <label class="form-label">New Status</label>
-        <select class="form-control" id="statusSelect">
-          <option value="pending">Pending</option>
-          <option value="in_progress">In Progress</option>
-          <option value="resolved">Resolved</option>
-          <option value="rejected">Rejected</option>
-        </select>
+        <label class="form-label">Select New Status</label>
+        <div class="status-flow-btns">
+          <button type="button" class="status-flow-btn" data-status="pending" onclick="selectFlowStatus('pending')">
+            <span class="status-flow-icon">⏳</span>
+            <span>Pending</span>
+          </button>
+          <div class="status-flow-arrow">→</div>
+          <button type="button" class="status-flow-btn" data-status="in_progress" onclick="selectFlowStatus('in_progress')">
+            <span class="status-flow-icon">🔧</span>
+            <span>In Progress</span>
+          </button>
+          <div class="status-flow-arrow">→</div>
+          <button type="button" class="status-flow-btn" data-status="resolved" onclick="selectFlowStatus('resolved')">
+            <span class="status-flow-icon">✅</span>
+            <span>Resolved</span>
+          </button>
+          <button type="button" class="status-flow-btn status-flow-danger" data-status="rejected" onclick="selectFlowStatus('rejected')">
+            <span class="status-flow-icon">❌</span>
+            <span>Reject</span>
+          </button>
+        </div>
       </div>
+
       <div class="form-group">
-        <label class="form-label">Remark (optional)</label>
-        <textarea class="form-control" id="statusRemark" rows="3" placeholder="Add a note about this status change..."></textarea>
+        <label class="form-label">📝 Admin Remark / Resolution Note <span style="color:var(--text-muted)">(optional)</span></label>
+        <textarea class="form-control" id="statusRemark" rows="3"
+          placeholder="Add a note for the citizen about what action is being taken…"></textarea>
       </div>
-      <button class="btn btn-primary" type="submit" id="statusUpdateBtn">Update Status</button>
+
+      <button class="btn btn-primary btn-lg mt-1" type="submit" id="statusUpdateBtn"
+        style="width:100%; box-shadow: var(--shadow-glow); opacity:0.5; cursor:not-allowed;" disabled>
+        Select a Status to Continue
+      </button>
     </form>
   </div>
 </div>

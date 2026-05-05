@@ -160,12 +160,14 @@ router.get('/', authenticate, async (req, res) => {
       .limit(parseInt(limit))
       .lean({ virtuals: true });
 
-    // Map fields to match previous SQLite response format
+    // Map fields — explicitly set id as a plain string so the frontend always
+    // receives a valid MongoDB ObjectId string (lean() virtuals are unreliable).
     complaints = complaints.map(c => {
+      c.id = c._id.toString();          // ← guaranteed string ID
       if (c.user_id) {
-        c.citizen_name = c.user_id.name;
+        c.citizen_name  = c.user_id.name;
         c.citizen_email = c.user_id.email;
-        c.user_id = c.user_id._id || c.user_id.id;
+        c.user_id       = (c.user_id._id || c.user_id).toString();
       }
       return c;
     });
@@ -210,38 +212,44 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
 
-    // Map populated fields
+    // Map populated fields — always set id as a plain string
+    complaint.id = complaint._id.toString();   // ← guaranteed string ID
     if (complaint.user_id) {
-      complaint.citizen_name = complaint.user_id.name;
+      complaint.citizen_name  = complaint.user_id.name;
       complaint.citizen_email = complaint.user_id.email;
-      complaint.user_id = complaint.user_id._id || complaint.user_id.id;
+      complaint.user_id       = (complaint.user_id._id || complaint.user_id).toString();
     }
 
+    // Use the guaranteed string ID for sub-collection queries
+    const complaintIdStr = complaint.id;
+
     // Fetch status history
-    let history = await StatusHistory.find({ complaint_id: complaint.id })
+    let history = await StatusHistory.find({ complaint_id: complaintIdStr })
       .populate('changed_by', 'name')
       .sort({ changed_at: 1 })
       .lean({ virtuals: true });
 
     history = history.map(h => {
+      h.id = h._id.toString();
       if (h.changed_by) {
         h.changed_by_name = h.changed_by.name;
-        h.changed_by = h.changed_by._id || h.changed_by.id;
+        h.changed_by      = (h.changed_by._id || h.changed_by).toString();
       }
       return h;
     });
 
     // Fetch comments
-    let comments = await Comment.find({ complaint_id: complaint.id })
+    let comments = await Comment.find({ complaint_id: complaintIdStr })
       .populate('user_id', 'name role')
       .sort({ created_at: 1 })
       .lean({ virtuals: true });
 
     comments = comments.map(c => {
+      c.id = c._id.toString();
       if (c.user_id) {
         c.author_name = c.user_id.name;
         c.author_role = c.user_id.role;
-        c.user_id = c.user_id._id || c.user_id.id;
+        c.user_id     = (c.user_id._id || c.user_id).toString();
       }
       return c;
     });
@@ -260,8 +268,12 @@ router.get('/:id', authenticate, async (req, res) => {
  */
 router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ success: false, message: 'Invalid complaint ID.' });
+    const rawId = req.params.id;
+
+    // Guard: reject clearly invalid IDs immediately with helpful log
+    if (!rawId || !mongoose.Types.ObjectId.isValid(rawId)) {
+      console.warn('[PATCH /status] Received invalid complaint ID:', rawId);
+      return res.status(400).json({ success: false, message: `Invalid complaint ID: "${rawId}". Expected a 24-character MongoDB ObjectId.` });
     }
 
     const { status, remark } = req.body;
@@ -270,7 +282,7 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: `Status must be one of: ${VALID_STATUSES.join(', ')}.` });
     }
 
-    const complaint = await Complaint.findById(req.params.id);
+    const complaint = await Complaint.findById(rawId);
     if (!complaint) {
       return res.status(404).json({ success: false, message: 'Complaint not found.' });
     }
@@ -278,17 +290,17 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
     const oldStatus = complaint.status;
 
     // Update status
-    complaint.status = status;
+    complaint.status      = status;
     complaint.assigned_to = req.user.id;
     await complaint.save();
 
-    // Log the status change in history
+    // Log the status change — use _id (ObjectId) not .id virtual for reliability
     await StatusHistory.create({
-      complaint_id: complaint.id,
-      changed_by: req.user.id,
-      old_status: oldStatus,
-      new_status: status,
-      remark: remark || null
+      complaint_id: complaint._id,   // ← use _id directly on the Mongoose document
+      changed_by:   req.user.id,
+      old_status:   oldStatus,
+      new_status:   status,
+      remark:       remark || null,
     });
 
     return res.json({

@@ -86,6 +86,21 @@ function switchAuthTab(tab) {
   document.getElementById('tabRegister').classList.toggle('active', !isLogin);
 }
 
+// ─── Admin Auto-fill ──────────────────────────────────────────────────────────
+/** Fills the login form with the admin credentials for quick access. */
+function fillAdminCreds() {
+  document.getElementById('loginEmail').value    = 'Admin@gmail.com';
+  document.getElementById('loginPassword').value = 'Admin123';
+  // Briefly highlight the fields to signal the auto-fill
+  ['loginEmail', 'loginPassword'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.transition = 'box-shadow 0.3s';
+    el.style.boxShadow  = '0 0 0 3px rgba(139,92,246,0.5)';
+    setTimeout(() => el.style.boxShadow = '', 1200);
+  });
+  toast('Admin credentials filled! Click Login to proceed. 🔑', 'info', 2500);
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 async function handleLogin(e) {
   e.preventDefault();
@@ -178,6 +193,12 @@ function showApp() {
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function navigate(page) {
+  // Guard: citizens cannot access admin page
+  if (page === 'admin' && STATE.user?.role !== 'admin') {
+    toast('Access denied. Admin only.', 'error');
+    return;
+  }
+
   STATE.currentPage = page;
 
   // Show the selected page section
@@ -191,7 +212,7 @@ function navigate(page) {
   // Load data for the page
   if (page === 'dashboard')  loadDashboard();
   if (page === 'complaints') { STATE.complaintsPage = 1; loadComplaints(); }
-  if (page === 'admin')      { STATE.adminPage = 1; loadAdminComplaints(); loadAdminStats(); }
+  if (page === 'admin')      { STATE.adminPage = 1; loadAdminData(); }
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -308,7 +329,7 @@ async function openComplaintDetail(id) {
 
     // Admin-only: show update status button
     const adminBtn = STATE.user.role === 'admin'
-      ? `<button class="btn btn-primary btn-sm mt-2" onclick="openStatusModal(${complaint.id}, '${complaint.status}')">✏️ Update Status</button>`
+      ? `<button class="btn btn-primary btn-sm mt-2" onclick="openStatusModal('${complaint.id}','${complaint.status}','${escapeAttr(complaint.title)}','${escapeAttr(complaint.citizen_name||'')}','${escapeAttr(complaint.category||'')}')">✏️ Update Status</button>`
       : '';
 
     // Image from backend uploads
@@ -357,7 +378,7 @@ async function openComplaintDetail(id) {
           <div style="font-size:0.9rem;">${c.message}</div>
         </div>`).join('')}
 
-      <form onsubmit="submitComment(event, ${complaint.id})" style="display:flex;gap:0.6rem;margin-top:0.75rem;">
+      <form onsubmit="submitComment(event, '${complaint.id}')" style="display:flex;gap:0.6rem;margin-top:0.75rem;">
         <input class="form-control" id="commentInput_${complaint.id}" type="text" placeholder="Add a comment…" required />
         <button class="btn btn-primary btn-sm" type="submit">Send</button>
       </form>`;
@@ -386,19 +407,254 @@ async function submitComment(e, id) {
   }
 }
 
-// ─── Admin — Stats ────────────────────────────────────────────────────────────
+// ─── Admin — Main Data Loader ─────────────────────────────────────────────────
+async function loadAdminData() {
+  await loadAdminStats();
+  const view = STATE.adminView || 'kanban';
+  if (view === 'kanban') await loadAdminKanban();
+  else await loadAdminTable();
+}
+
+// ─── Admin — Stats with animated progress bars ────────────────────────────────
 async function loadAdminStats() {
   try {
     const { stats } = await api('GET', '/complaints/stats/summary');
+    const total = stats.total || 1; // avoid divide-by-zero
+
     document.getElementById('aStatTotal').textContent    = stats.total       || 0;
     document.getElementById('aStatPending').textContent  = stats.pending     || 0;
     document.getElementById('aStatProgress').textContent = stats.in_progress || 0;
     document.getElementById('aStatResolved').textContent = stats.resolved    || 0;
+    document.getElementById('aStatRejected').textContent = stats.rejected    || 0;
+
+    // Animate progress bars
+    setTimeout(() => {
+      setBar('aBarPending',  (stats.pending     || 0) / total * 100);
+      setBar('aBarProgress', (stats.in_progress || 0) / total * 100);
+      setBar('aBarResolved', (stats.resolved    || 0) / total * 100);
+      setBar('aBarRejected', (stats.rejected    || 0) / total * 100);
+    }, 100);
   } catch (_) {}
 }
 
-// ─── Admin — Complaints Table ─────────────────────────────────────────────────
-async function loadAdminComplaints() {
+function setBar(id, pct) {
+  const el = document.getElementById(id);
+  if (el) el.style.width = Math.min(100, pct) + '%';
+}
+
+// ─── Admin — Kanban Board ─────────────────────────────────────────────────────
+async function loadAdminKanban() {
+  const category = document.getElementById('adminFilterCategory')?.value || '';
+  const priority = document.getElementById('adminFilterPriority')?.value || '';
+  const search   = document.getElementById('adminSearchInput')?.value.trim()  || '';
+
+  const STATUSES = ['pending', 'in_progress', 'resolved', 'rejected'];
+  const cols = {
+    pending:     document.getElementById('kanbanPending'),
+    in_progress: document.getElementById('kanbanInProgress'),
+    resolved:    document.getElementById('kanbanResolved'),
+    rejected:    document.getElementById('kanbanRejected'),
+  };
+
+  // Show loading in each column
+  STATUSES.forEach(s => {
+    if (cols[s]) cols[s].innerHTML = '<div class="kanban-loading"><span class="loader"></span></div>';
+  });
+
+  // Fetch all 4 columns concurrently
+  await Promise.all(STATUSES.map(async (status) => {
+    try {
+      const params = new URLSearchParams({ status, limit: 50, page: 1 });
+      if (category) params.set('category', category);
+      if (priority) params.set('priority', priority);
+
+      const { complaints } = await api('GET', `/complaints?${params}`);
+
+      // Client-side search filter
+      const filtered = search
+        ? complaints.filter(c =>
+            c.title.toLowerCase().includes(search.toLowerCase()) ||
+            (c.citizen_name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (c.location     || '').toLowerCase().includes(search.toLowerCase())
+          )
+        : complaints;
+
+      // Update column count badge
+      const countEl = document.getElementById(`kanbanCount${capitalize(status).replace(' ', '')}`);
+      const countId = { pending: 'kanbanCountPending', in_progress: 'kanbanCountProgress', resolved: 'kanbanCountResolved', rejected: 'kanbanCountRejected' };
+      const cntEl = document.getElementById(countId[status]);
+      if (cntEl) cntEl.textContent = filtered.length;
+
+      if (!filtered.length) {
+        cols[status].innerHTML = `<div class="kanban-empty"><div class="kanban-empty-icon">📭</div><p>No ${status.replace('_',' ')} complaints</p></div>`;
+      } else {
+        cols[status].innerHTML = filtered.map(c => kanbanCardHTML(c)).join('');
+      }
+    } catch (err) {
+      cols[status].innerHTML = `<div class="kanban-empty"><p style="color:var(--danger);">${err.message}</p></div>`;
+    }
+  }));
+}
+
+// ─── Admin — Kanban Card HTML ─────────────────────────────────────────────────
+function kanbanCardHTML(c) {
+  const priorityColors = { high: 'var(--danger)', medium: 'var(--warning)', low: 'var(--success)' };
+  const priorityDot = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${priorityColors[c.priority]||'#888'};margin-right:4px;"></span>`;
+
+  // Build quick action buttons based on current status
+  let actions = '';
+  if (c.status === 'pending') {
+    actions = `
+      <button class="kanban-action-btn ka-progress" onclick="quickStatus(event,'${c.id}','in_progress')">🔧 Start</button>
+      <button class="kanban-action-btn ka-rejected" onclick="quickStatus(event,'${c.id}','rejected')">❌ Reject</button>`;
+  } else if (c.status === 'in_progress') {
+    actions = `
+      <button class="kanban-action-btn ka-resolved" onclick="quickStatus(event,'${c.id}','resolved')">✅ Resolve</button>
+      <button class="kanban-action-btn ka-rejected" onclick="quickStatus(event,'${c.id}','rejected')">❌ Reject</button>`;
+  } else if (c.status === 'resolved' || c.status === 'rejected') {
+    actions = `<button class="kanban-action-btn ka-detail" onclick="openComplaintDetail('${c.id}')">👁 View Details</button>`;
+  }
+
+  return `
+    <div class="kanban-card" onclick="openStatusModal('${c.id}','${c.status}','${escapeAttr(c.title)}','${escapeAttr(c.citizen_name||'')}','${escapeAttr(c.category||'')}')"
+         id="kcard-${c.id}">
+      <div class="kanban-card-title">${c.title}</div>
+      <div class="kanban-card-meta">
+        <span>${priorityDot}${capitalize(c.priority)} Priority · 📂 ${c.category}</span>
+        <span>👤 ${c.citizen_name || 'Unknown'}</span>
+        <span>📅 ${formatDate(c.created_at)}</span>
+      </div>
+      <div class="kanban-card-actions" onclick="event.stopPropagation()">
+        ${actions}
+        <button class="kanban-action-btn ka-detail" onclick="openComplaintDetail('${c.id}')">💬 Detail</button>
+      </div>
+    </div>`;
+}
+
+// ─── Admin — Quick Status Update (no modal) ───────────────────────────────────
+async function quickStatus(event, id, status) {
+  event.stopPropagation();
+  const labels = { in_progress: 'In Progress', resolved: 'Resolved', rejected: 'Rejected' };
+  if (!confirm(`Move this complaint to "${labels[status] || status}"?`)) return;
+
+  try {
+    await api('PATCH', `/complaints/${id}/status`, { status });
+    toast(`Status updated to "${labels[status]}" ✅`, 'success');
+    loadAdminKanban();
+    loadAdminStats();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// ─── Admin — View Switch (kanban / table / users) ──────────────────────────────
+function switchAdminView(view) {
+  STATE.adminView = view;
+  document.getElementById('adminKanbanView').classList.toggle('hidden', view !== 'kanban');
+  document.getElementById('adminTableView').classList.toggle('hidden',  view !== 'table');
+  document.getElementById('adminUsersView').classList.toggle('hidden',  view !== 'users');
+  document.getElementById('viewBtnKanban').classList.toggle('active', view === 'kanban');
+  document.getElementById('viewBtnTable').classList.toggle('active',  view === 'table');
+  document.getElementById('viewBtnUsers').classList.toggle('active',  view === 'users');
+  // Also show/hide the filters bar (irrelevant on Users tab)
+  const filtersEl = document.querySelector('.admin-filters');
+  if (filtersEl) filtersEl.style.display = view === 'users' ? 'none' : '';
+  if (view === 'kanban') loadAdminKanban();
+  else if (view === 'table') loadAdminTable();
+  else loadAdminUsers();
+}
+
+// ─── Admin — Debounced Search (complaints) ────────────────────────────────────
+let _searchTimer = null;
+function debounceAdminSearch() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => loadAdminData(), 350);
+}
+
+// ─── Admin — Users List ───────────────────────────────────────────────────────
+let _usersPage = 1;
+let _usersSearchTimer = null;
+
+function debounceUsersSearch() {
+  clearTimeout(_usersSearchTimer);
+  _usersSearchTimer = setTimeout(() => { _usersPage = 1; loadAdminUsers(); }, 350);
+}
+
+async function loadAdminUsers() {
+  const search = document.getElementById('usersSearchInput')?.value.trim() || '';
+  const grid   = document.getElementById('usersGrid');
+  grid.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);"><span class="loader"></span> Loading users…</div>';
+
+  try {
+    const params = new URLSearchParams({ page: _usersPage, limit: 12 });
+    if (search) params.set('search', search);
+
+    const { users, pagination } = await api('GET', `/users?${params}`);
+
+    if (!users.length) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">👥</div>
+          <h3>No users found</h3>
+          <p>${search ? 'Try a different search term.' : 'No citizen accounts registered yet.'}</p>
+        </div>`;
+    } else {
+      grid.innerHTML = users.map(userCardHTML).join('');
+    }
+
+    renderPagination('usersPaginationBar', pagination, p => {
+      _usersPage = p;
+      loadAdminUsers();
+    });
+  } catch (err) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${err.message}</p></div>`;
+  }
+}
+
+// ─── Admin — User Card HTML ───────────────────────────────────────────────────
+function userCardHTML(u) {
+  const initials = (u.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const c = u.complaints || {};
+  const joined = u.created_at
+    ? new Date(u.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+    : '—';
+
+  return `
+    <div class="user-card">
+      <div class="user-card-header">
+        <div class="user-avatar">${initials}</div>
+        <div class="user-info">
+          <div class="user-name">${u.name}</div>
+          <div class="user-email">📧 ${u.email}</div>
+          ${u.phone ? `<div class="user-phone">📞 ${u.phone}</div>` : ''}
+          <div class="user-joined">📅 Joined ${joined}</div>
+        </div>
+      </div>
+      <div class="user-complaints-title">Complaints Submitted</div>
+      <div class="user-stats">
+        <div class="user-stat">
+          <span class="user-stat-num">${c.total || 0}</span>
+          <span class="user-stat-lbl">Total</span>
+        </div>
+        <div class="user-stat user-stat-pending">
+          <span class="user-stat-num">${c.pending || 0}</span>
+          <span class="user-stat-lbl">⏳ Pending</span>
+        </div>
+        <div class="user-stat user-stat-progress">
+          <span class="user-stat-num">${c.in_progress || 0}</span>
+          <span class="user-stat-lbl">🔧 Progress</span>
+        </div>
+        <div class="user-stat user-stat-resolved">
+          <span class="user-stat-num">${c.resolved || 0}</span>
+          <span class="user-stat-lbl">✅ Resolved</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+
+// ─── Admin — Table View ───────────────────────────────────────────────────────
+async function loadAdminTable() {
   const status   = document.getElementById('adminFilterStatus')?.value   || '';
   const category = document.getElementById('adminFilterCategory')?.value || '';
   const page     = STATE.adminPage;
@@ -421,16 +677,16 @@ async function loadAdminComplaints() {
           <td style="color:var(--text-muted);">#${c.id}</td>
           <td>
             <span style="font-weight:500;cursor:pointer;color:var(--primary-light);"
-                  onclick="openComplaintDetail(${c.id})">${c.title}</span>
+                  onclick="openComplaintDetail('${c.id}')">${c.title}</span>
           </td>
           <td>${c.citizen_name}</td>
           <td>${c.category}</td>
           <td><span class="badge badge-${c.priority}">${capitalize(c.priority)}</span></td>
           <td>${badgeHTML(c.status)}</td>
           <td style="color:var(--text-muted);white-space:nowrap;">${formatDate(c.created_at)}</td>
-          <td>
-            <button class="btn btn-outline btn-sm" onclick="openStatusModal(${c.id}, '${c.status}')">
-              Update
+          <td style="display:flex;gap:0.4rem;">
+            <button class="btn btn-outline btn-sm" onclick="openStatusModal('${c.id}','${c.status}','${escapeAttr(c.title)}','${escapeAttr(c.citizen_name||'')}','${escapeAttr(c.category||'')}')">
+              ✏️ Update
             </button>
           </td>
         </tr>`).join('');
@@ -438,19 +694,62 @@ async function loadAdminComplaints() {
 
     renderPagination('adminPaginationBar', pagination, p => {
       STATE.adminPage = p;
-      loadAdminComplaints();
+      loadAdminTable();
     });
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);">${err.message}</td></tr>`;
   }
 }
 
+// Keep old name as alias so existing detail-modal calls still work
+const loadAdminComplaints = loadAdminTable;
+
 // ─── Admin — Status Update Modal ──────────────────────────────────────────────
-function openStatusModal(id, currentStatus) {
+function openStatusModal(id, currentStatus, title, citizenName, category) {
   document.getElementById('statusComplaintId').value = id;
-  document.getElementById('statusSelect').value      = currentStatus || 'pending';
+  document.getElementById('statusSelect').value      = '';
   document.getElementById('statusRemark').value      = '';
+  document.getElementById('statusModalTitle').textContent    = 'Update Status';
+  document.getElementById('statusModalSubtitle').textContent = title || '';
+
+  // Populate complaint info box
+  document.getElementById('statusComplaintInfo').innerHTML = `
+    <div class="sci-title">${title || 'Complaint #' + id}</div>
+    <div class="sci-meta">
+      <span>👤 ${citizenName || '—'}</span>
+      <span>📂 ${category   || '—'}</span>
+      <span>${badgeHTML(currentStatus)}</span>
+    </div>`;
+
+  // Reset flow buttons, pre-highlight current status
+  document.querySelectorAll('.status-flow-btn').forEach(btn => btn.classList.remove('selected'));
+  const activeBtn = document.querySelector(`.status-flow-btn[data-status="${currentStatus}"]`);
+  // Don't pre-select it — force the admin to actively pick a new one
+
+  // Disable submit until a status is picked
+  const submitBtn = document.getElementById('statusUpdateBtn');
+  submitBtn.disabled = true;
+  submitBtn.style.opacity = '0.5';
+  submitBtn.style.cursor  = 'not-allowed';
+  submitBtn.textContent   = 'Select a Status to Continue';
+
   document.getElementById('statusModal').classList.add('open');
+}
+
+function selectFlowStatus(status) {
+  document.getElementById('statusSelect').value = status;
+
+  // Toggle selected class
+  document.querySelectorAll('.status-flow-btn').forEach(btn => btn.classList.remove('selected'));
+  document.querySelector(`.status-flow-btn[data-status="${status}"]`)?.classList.add('selected');
+
+  // Enable submit button
+  const submitBtn = document.getElementById('statusUpdateBtn');
+  submitBtn.disabled = false;
+  submitBtn.style.opacity = '1';
+  submitBtn.style.cursor  = 'pointer';
+  const labels = { pending: '⏳ Set Pending', in_progress: '🔧 Start Progress', resolved: '✅ Mark Resolved', rejected: '❌ Reject Complaint' };
+  submitBtn.textContent = labels[status] || 'Confirm Status Update';
 }
 
 function closeStatusModal() {
@@ -464,18 +763,21 @@ async function handleStatusUpdate(e) {
   const remark = document.getElementById('statusRemark').value.trim();
   const btn    = document.getElementById('statusUpdateBtn');
 
+  if (!status) { toast('Please select a status.', 'error'); return; }
+
   btn.disabled = true;
+  const original = btn.textContent;
+  btn.innerHTML = '<span class="loader"></span> Updating…';
   try {
     await api('PATCH', `/complaints/${id}/status`, { status, remark });
-    toast(`Status updated to "${status}" ✅`, 'success');
+    toast(`Status updated to "${status.replace('_',' ')}" ✅`, 'success');
     closeStatusModal();
-    // Refresh whichever page the admin came from
-    if (STATE.currentPage === 'admin') loadAdminComplaints();
-    else loadComplaints();
+    loadAdminData();
   } catch (err) {
     toast(err.message, 'error');
   } finally {
     btn.disabled = false;
+    btn.textContent = original;
   }
 }
 
@@ -543,6 +845,13 @@ function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1).replace('_', ' ');
 }
+
+/** Escape a string for safe use inside an HTML attribute (e.g. onclick='...') */
+function escapeAttr(str) {
+  if (!str) return '';
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
 
 function formatDate(iso) {
   if (!iso) return '—';
