@@ -662,3 +662,81 @@ tr:last-child td { border-bottom: none; }
   font-size: 0.64rem; color: var(--text-muted);
   margin-top: 0.1rem;
 }
+
+/* ── Light Mode Theme ── */
+:root.light-mode {
+  --bg-base:       #f8fafc;
+  --bg-card:       #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-input:      #f8fafc;
+  --border:        #e2e8f0;
+  --text-primary:  #0f172a;
+  --text-secondary:#334155;
+  --text-muted:    #64748b;
+  --shadow-card:   0 8px 30px rgba(0,0,0,0.06);
+}
+:root.light-mode body {
+  background: var(--bg-base);
+  animation: none;
+}
+:root.light-mode .navbar {
+  background: rgba(255,255,255,0.85);
+}
+:root.light-mode .admin-hero {
+  background: #ffffff;
+  color: #333;
+}
+:root.light-mode .admin-hero::before {
+  background: linear-gradient(to right, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.2) 100%);
+}
+:root.light-mode .admin-hero-content h2 {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+:root.light-mode .admin-hero-content p {
+  color: var(--text-secondary);
+}
+:root.light-mode .auth-image::before {
+  background: linear-gradient(to top, rgba(248,250,252,1) 0%, rgba(248,250,252,0) 60%);
+}
+:root.light-mode .auth-image-content {
+  background: rgba(255, 255, 255, 0.85);
+}
+:root.light-mode .auth-image-content h2 {
+  color: var(--text-primary);
+}
+:root.light-mode .auth-tabs {
+  background: #f1f5f9;
+}
+:root.light-mode .view-toggle {
+  background: #f1f5f9;
+}
+:root.light-mode .kanban-col {
+  background: #ffffff;
+}
+:root.light-mode .kanban-card {
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+:root.light-mode .modal {
+  background: #ffffff;
+}
+:root.light-mode .toast {
+  background: #ffffff;
+}
+:root.light-mode .form-control {
+  background: #ffffff;
+}
+:root.light-mode select.form-control option {
+  background: #ffffff;
+}
+:root.light-mode .btn-outline {
+  border-color: #cbd5e1;
+}
+:root.light-mode .btn-outline:hover {
+  background: rgba(99,102,241,0.08);
+}
+:root.light-mode .timeline-item::before {
+  border-color: #ffffff;
+}

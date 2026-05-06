@@ -784,7 +784,7 @@ async function handleStatusUpdate(e) {
 // ─── UI Helper — Complaint Card ───────────────────────────────────────────────
 function complaintCardHTML(c) {
   return `
-    <div class="card complaint-card" onclick="openComplaintDetail(${c.id})">
+    <div class="card complaint-card" onclick="openComplaintDetail('${c.id}')">
       <div class="complaint-card-header">
         <span class="complaint-card-title">${c.title}</span>
         <div style="display:flex;gap:0.4rem;flex-shrink:0;">${badgeHTML(c.status)}</div>
@@ -880,5 +880,23 @@ document.getElementById('statusModal').addEventListener('click', function (e) {
         showApp();
       })
       .catch(() => logout()); // Token expired or revoked
+  }
+})();
+
+// ─── Theme Toggle ─────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const isLight = root.classList.toggle('light-mode');
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  const toggleBtn = document.getElementById('themeToggle');
+  if (toggleBtn) toggleBtn.textContent = isLight ? '🌙' : '☀️';
+}
+
+(function loadTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'light') {
+    document.documentElement.classList.add('light-mode');
+    const toggleBtn = document.getElementById('themeToggle');
+    if (toggleBtn) toggleBtn.textContent = '🌙';
   }
 })();
